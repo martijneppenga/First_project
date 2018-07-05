@@ -1,49 +1,76 @@
 import numpy as np
-from functions import *
 import matplotlib.pyplot as plt
-from matplotlib import cm
-from IPython import display
-from constants import *
+import time
+import numba
+import sys
+import importlib
+import functions; importlib.reload(functions); from functions import *
+import constants; importlib.reload(constants); from constants import *
+def start():
+    #Initial conditions
+    w_refl = 0
+    r0,u0 = initialization(nbps, N, L, a, mode)
+    #initialisation  
+    w_refl = 0
+    w = np.ones((N,))
+
+    A = np.zeros((Nbins,Nbins,Nbins))                       #Matrix which tracks where the dose was deposited
+    T = np.zeros((Nbins,Nbins,Nbins))                       #Fractional transport, probably matrix with same size as our grid
 
 
-cylinder = True
-boundary = compute_structure(N,M,cylinder)
-rho = np.ones((N,M))
-velocity = 0.001*np.ones((N,M,2))
-velocity[:,:,1] = 0 
-velocity[boundary,:] = 0
+    mu_t = mu_a + mu_s  #attenuation coefficient
 
-
-flow_density = equilibrium_function((N,M,9),rho,w,velocity,e)
+    r = np.copy(r0)
+    u = np.copy(u0)
 
 
 
-## Main loop ##
-for t in range(Numtimesteps):
+    if abs(g)>1:
+        sys.exit("g (anisotropy of scattering) is too large, please choose g such that |g|<1")
+    if 1/mu_t*4>L:
+        sys.exit("The mean free path lenght is too large(1/mu_t). Please choose a smaller mean free"+
+                 " path length or large box size (L)")    
 
-    rho = np.sum(flow_density, axis=2)
-    velocity = velocity_calc(flow_density,e,rho)
-    velocity[:,:,0] +=0.001 * v_int
-    f_eq = equilibrium_function((N,M,9),rho,w,velocity,e)
-    flow_density_new = relaxation(flow_density,f_eq,tau) 
-    flow_density_new = bounce_back(flow_density_new,flow_density,boundary,bounce)
-    flow_density = flow_fluid(flow_density_new,e,boundary)
-    
-    # Make images of velocity in the x and y direction and of the speed
-    if (t % 1000 == 0):
-        plt.clf()
-        fig=plt.figure(figsize=(10, 5), dpi= 80, facecolor='w', edgecolor='k')
-        
-        fig=plt.figure(figsize=(10, 5), dpi= 80, facecolor='w', edgecolor='k')
-        
-        
-  
-        plt.subplot(1, 2, 1)
-        plt.imshow((np.sqrt(velocity[:,:,0] ** 2 + velocity[:,:,1] ** 2)).transpose())
-        plt.colorbar()
-            
-        plt.subplot(1, 2, 2)
-        plt.plot(velocity[:,50,0])
-        plt.tight_layout()
-        display.clear_output(wait=True)
-        plt.show()
+    start = time.time()   
+    while np.sum(w)>0:
+
+
+
+
+        r_old = np.copy(r)
+
+        #hop
+        r,s = hop(r,u,mu_t)
+        if cavity:       
+            #Reflect and transmit photons that travel through the cavity
+            r,u,w,s,out = cavity_trans_refl(r,r_old,u,w,s,cavcent,cavr,n1,n2,mu_t)
+        else:
+            out = np.ones(len(w),dtype=bool)
+        #reflection on boundary of the system
+        r[:,out],u[:,out],w[out],w_refl = reflection(r[:,out],u[:,out],s[out],L,w[out],w_refl,n1,n2)
+
+        if np.sum(out)>0:
+            #absorption
+            A,w[out] = absorb(A,r[:,out],Nbins,dL,w[out],mu_a,mu_t)
+
+            #scattering
+            u[:,out] = scattering(u[:,out],g)
+
+        #terminate?
+        w,u,r = terminate(w,u,r,threshold,p_term)
+    x = np.linspace(0,Nbins-1,Nbins)
+    y = np.copy(x)
+    z = np.copy(x)
+    [X,Y,Z] = np.meshgrid(x,y,z)
+    dose_spine = np.sum(A[((X-spine_c[0]/dL)**2 + (Z-spine_c[1]/dL)**2 <spine_r**2)])/(4/3*np.pi*t_r**3)                #Dose in the spine
+    dose_t = np.sum(A[((X-t_c[0]/dL)**2 + (Y-t_c[1]/dL)**2 + (Z-t_c[2]/dL)**2)<t_r**2])/(20*np.pi*spine_r**2)           #Dose in the tumor
+
+    end = time.time()
+    dt = end-start
+    print("Time elapsed", dt)
+
+    return A,dose_t,dose_spine
+
+
+
+
