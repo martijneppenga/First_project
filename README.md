@@ -16,7 +16,7 @@ results = simulation.start()
 importlib.reload(data_processing)
 data_processing.start(*results)
 ```
-
+Or, simply run launcher.py which does all of the above steps.
 
 ### Options for constants
 
