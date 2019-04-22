@@ -26,7 +26,7 @@ def initialization(nbps, N, L, a, mode):
      u0: array of size (3,N)
         array containing the initial unit velocity vector for all the N photons with the rows containing the x,y,z-velocity component.
      r0: array of size (3,N)
-        array containing the initial positions for all the N photons with the rows containing the x,y,z-velocity component.
+        array containing the initial positions for all the N photons with the rows containing the x,y,z-position component.
     
     """
     #Creating random radius and phi for a random perturbation (based on the beam radius)
